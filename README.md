@@ -61,6 +61,40 @@ A Python desktop application built with **PyQt5** and **OpenCV** for real-time *
   pip install PyQt5 opencv-python opencv-contrib-python numpy h5py pillow pyttsx3
   ```
 
+> **Note on `qtawesome`**: The UI redesign does **not** require `qtawesome`. All icons are rendered as Unicode/text. If you install it (`pip install qtawesome`) it is not used but will not cause errors.
+
+---
+
+## UI Overview (v2.0 — "Modern AI Studio" Theme)
+
+The visual layer was completely redesigned without touching any recognition, camera, or TTS logic.
+
+### Design Tokens (`ui_theme.py`)
+
+| Token group | Dark value | Light value |
+|---|---|---|
+| Background base | `#0B0F1A` | `#F8FAFC` |
+| Surface | `#111827` | `#FFFFFF` |
+| Card | `#151C2E` | `#F1F5F9` |
+| Primary accent | `#6366F1` → `#22D3EE` (gradient) | same |
+| Success | `#34D399` | `#059669` |
+| Warning | `#FBBF24` | `#D97706` |
+| Danger | `#F87171` | `#DC2626` |
+| Font | Inter / Segoe UI Variable / Segoe UI | same |
+
+### Theme Toggle
+
+A ☀ / 🌙 button in the sidebar footer switches between **Dark** and **Light** themes. The choice is persisted automatically via `QSettings("SignStudio", "UITheme")` and restored on the next launch.
+
+### New Reusable Widgets (`ui_theme.py`)
+
+| Widget | Description |
+|---|---|
+| `ToggleSwitch` | Animated pill toggle, drop-in `QCheckBox` subclass |
+| `PillBadge` | Coloured rounded pill (`live` / `paused` / `error` states) |
+| `Toast` | Slide-in, auto-dismiss notification (bottom-right) |
+| `build_qss(tokens)` | Generates the full QSS from a token dict |
+
 ---
 
 ## How to Run

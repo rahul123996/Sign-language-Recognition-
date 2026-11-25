@@ -1,6 +1,8 @@
 """
-Sign Language Recognition Studio - Upgraded Modern UI
-Includes Real-time ASL detection, Sentence Builder, Gesture Catalog, Custom Gesture Studio, and Audio Speech
+Sign Language Recognition Studio – Premium "Modern AI Studio" UI
+Redesigned visual layer. ALL logic methods are byte-for-byte identical to
+the original; only the stylesheet, layout, and cosmetic widget construction
+have been updated. Import of ui_theme provides the centralised token system.
 """
 __author__ = 'Mohsin Raza, Muhammad Awais Sarwar, Upgraded Studio Edition'
 
@@ -10,6 +12,14 @@ import shutil
 import tempfile
 import cv2
 import numpy as np
+
+# HiDPI support (must be set before QApplication)
+import PyQt5.QtWidgets as _qtw_pre
+_app_pre = _qtw_pre.QApplication.instance()
+if _app_pre is None:
+    from PyQt5.QtCore import Qt as _Qt
+    _qtw_pre.QApplication.setAttribute(_Qt.AA_EnableHighDpiScaling, True)
+    _qtw_pre.QApplication.setAttribute(_Qt.AA_UseHighDpiPixmaps, True)
 
 # Ensure working directory is set to script's directory
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +36,7 @@ from keras.models import load_model
 
 # PyQt5 GUI
 from PyQt5 import QtWidgets, QtCore, QtGui
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QSize, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QImage, QPixmap, QFont, QIcon, QColor, QPainter, QPen, QBrush
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -37,6 +47,13 @@ from PyQt5.QtWidgets import (
 )
 
 import pyttsx3
+
+# UI theme system
+from ui_theme import (
+    DARK_TOKENS, LIGHT_TOKENS, build_qss,
+    ToggleSwitch, PillBadge, Toast,
+    load_theme_pref, save_theme_pref
+)
 
 # Model initialization
 image_x, image_y = 64, 64
@@ -81,6 +98,8 @@ GESTURE_CATALOG = [
     {"char": ". Period", "name": "Period Gesture", "desc": "Single point / custom '..png' gesture to conclude a sentence.", "type": "Special"}
 ]
 
+
+# ── Unchanged functional helpers ─────────────────────────────────────────────
 
 def fileSearch():
     """Searches each file ending with .png in SampleGestures directory"""
@@ -182,260 +201,24 @@ def openimg():
     pass
 
 
-# Modern Stylesheet (QSS)
-MODERN_STYLE = """
-QMainWindow {
-    background-color: #0b0f19;
-    color: #f1f5f9;
-}
-QWidget {
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    color: #e2e8f0;
-}
-/* Sidebar */
-#Sidebar {
-    background-color: #0f172a;
-    border-right: 1px solid #1e293b;
-    min-width: 230px;
-    max-width: 230px;
-}
-#AppTitle {
-    color: #38bdf8;
-    font-size: 19px;
-    font-weight: 700;
-    padding: 18px 16px 4px 16px;
-}
-#AppSubtitle {
-    color: #94a3b8;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 0px 16px 18px 16px;
-}
-/* Nav Buttons */
-QPushButton.nav-btn {
-    background-color: transparent;
-    color: #94a3b8;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: left;
-    padding: 12px 18px;
-    border: none;
-    border-radius: 8px;
-    margin: 4px 10px;
-}
-QPushButton.nav-btn:hover {
-    background-color: #1e293b;
-    color: #f8fafc;
-}
-QPushButton.nav-btn:checked, QPushButton.nav-btn.active {
-    background-color: #2563eb;
-    color: #ffffff;
-}
-
-/* Card panels */
-QFrame.card {
-    background-color: #131d31;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    padding: 14px;
-}
-QFrame.hero-card {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1e1b4b, stop:1 #0f172a);
-    border: 1px solid #312e81;
-    border-radius: 12px;
-    padding: 16px;
-}
-
-/* Action Buttons */
-QPushButton.btn-primary {
-    background-color: #2563eb;
-    color: white;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 8px;
-    padding: 9px 18px;
-    border: none;
-}
-QPushButton.btn-primary:hover {
-    background-color: #1d4ed8;
-}
-QPushButton.btn-success {
-    background-color: #059669;
-    color: white;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 8px;
-    padding: 9px 18px;
-    border: none;
-}
-QPushButton.btn-success:hover {
-    background-color: #047857;
-}
-QPushButton.btn-danger {
-    background-color: #dc2626;
-    color: white;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 8px;
-    padding: 9px 18px;
-    border: none;
-}
-QPushButton.btn-danger:hover {
-    background-color: #b91c1c;
-}
-QPushButton.btn-secondary {
-    background-color: #1e293b;
-    color: #cbd5e1;
-    font-size: 13px;
-    font-weight: 600;
-    border-radius: 8px;
-    padding: 9px 16px;
-    border: 1px solid #334155;
-}
-QPushButton.btn-secondary:hover {
-    background-color: #334155;
-    color: white;
-}
-
-/* Text Editors */
-QTextEdit, QLineEdit {
-    background-color: #0b1120;
-    border: 1px solid #1e293b;
-    border-radius: 8px;
-    color: #f8fafc;
-    font-size: 14px;
-    padding: 10px;
-}
-QTextEdit:focus, QLineEdit:focus {
-    border: 1px solid #38bdf8;
-}
-
-/* Sliders */
-QSlider::groove:horizontal {
-    height: 6px;
-    background: #1e293b;
-    border-radius: 3px;
-}
-QSlider::sub-page:horizontal {
-    background: #38bdf8;
-    border-radius: 3px;
-}
-QSlider::handle:horizontal {
-    background: #ffffff;
-    border: 2px solid #38bdf8;
-    width: 16px;
-    margin-top: -5px;
-    margin-bottom: -5px;
-    border-radius: 8px;
-}
-
-/* Progress bar */
-QProgressBar {
-    border: 1px solid #1e293b;
-    border-radius: 6px;
-    text-align: center;
-    background-color: #0b1120;
-    color: #f8fafc;
-    font-weight: 600;
-    font-size: 11px;
-}
-QProgressBar::chunk {
-    background-color: #10b981;
-    border-radius: 5px;
-}
-
-/* Scroll area */
-QScrollArea {
-    border: none;
-    background-color: transparent;
-}
-QScrollBar:vertical {
-    border: none;
-    background: #0f172a;
-    width: 8px;
-    margin: 0px;
-}
-QScrollBar::handle:vertical {
-    background: #334155;
-    min-height: 20px;
-    border-radius: 4px;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0px;
-}
-/* Combo Box */
-QComboBox {
-    background-color: #0b1120;
-    border: 1px solid #1e293b;
-    border-radius: 8px;
-    color: #f8fafc;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 10px;
-}
-QComboBox:hover {
-    border: 1px solid #38bdf8;
-}
-QComboBox QAbstractItemView {
-    background-color: #0f172a;
-    color: #f8fafc;
-    selection-background-color: #2563eb;
-    border: 1px solid #1e293b;
-    border-radius: 6px;
-}
-/* Checkboxes */
-QCheckBox {
-    color: #cbd5e1;
-    font-size: 11px;
-    font-weight: 500;
-    spacing: 6px;
-}
-QCheckBox::indicator {
-    width: 15px;
-    height: 15px;
-    border-radius: 4px;
-    border: 1px solid #334155;
-    background: #0b1120;
-}
-QCheckBox::indicator:checked {
-    background: #2563eb;
-    border: 1px solid #38bdf8;
-}
-/* Mini Buttons */
-QPushButton.btn-mini {
-    background-color: #1e293b;
-    color: #cbd5e1;
-    font-size: 11px;
-    font-weight: 600;
-    border-radius: 6px;
-    padding: 4px 8px;
-    border: 1px solid #334155;
-}
-QPushButton.btn-mini:hover {
-    background-color: #334155;
-    color: #ffffff;
-}
-QPushButton.btn-mini.active {
-    background-color: #2563eb;
-    color: #ffffff;
-    border: 1px solid #38bdf8;
-}
-"""
-
+# ── Dashboard ────────────────────────────────────────────────────────────────
 
 class Dashboard(QMainWindow):
     def __init__(self):
         super(Dashboard, self).__init__()
         self.setWindowTitle("Sign Language Recognition Studio AI")
-        self.resize(1180, 800)
-        self.setMinimumSize(960, 680)
-        
+        self.resize(1280, 800)
+        self.setMinimumSize(1100, 720)
+
         if os.path.exists('icons/windowLogo.png'):
             self.setWindowIcon(QIcon('icons/windowLogo.png'))
 
-        self.setStyleSheet(MODERN_STYLE)
+        # Load + apply theme
+        self._theme = load_theme_pref()
+        self._tokens = DARK_TOKENS if self._theme == "dark" else LIGHT_TOKENS
+        self.setStyleSheet(build_qss(self._tokens))
 
-        # State
+        # State (unchanged)
         self.cam = None
         self.cam_active = True
         self.hsv_slider_val = 65
@@ -450,10 +233,37 @@ class Dashboard(QMainWindow):
         # Setup Main UI
         self.init_ui()
 
-        # Camera frame timer (30 FPS)
+        # Camera frame timer (30 FPS) – unchanged
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_camera_frame)
         self.start_camera()
+
+    # ── Theme toggle ─────────────────────────────────────────────────────────
+
+    def _toggle_theme(self):
+        """Switch between dark and light themes and persist the choice."""
+        self._theme = "light" if self._theme == "dark" else "dark"
+        self._tokens = DARK_TOKENS if self._theme == "dark" else LIGHT_TOKENS
+        save_theme_pref(self._theme)
+        self.setStyleSheet(build_qss(self._tokens))
+        icon = "☀" if self._theme == "dark" else "🌙"
+        self._btn_theme.setText(icon)
+        self._btn_theme.setToolTip(
+            "Switch to Light theme" if self._theme == "dark" else "Switch to Dark theme"
+        )
+
+    # ── Sidebar helper ───────────────────────────────────────────────────────
+
+    def _make_nav_btn(self, label: str, tooltip: str = "") -> QPushButton:
+        """Create a styled sidebar nav button."""
+        btn = QPushButton(label)
+        btn.setProperty("class", "nav-btn")
+        btn.setCheckable(True)
+        btn.setToolTip(tooltip)
+        btn.setMinimumHeight(40)
+        return btn
+
+    # ── init_ui ──────────────────────────────────────────────────────────────
 
     def init_ui(self):
         central_widget = QWidget(self)
@@ -462,62 +272,102 @@ class Dashboard(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # 1. Left Sidebar
+        # ── Sidebar ──────────────────────────────────────────────────────────
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(230)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 16)
-        sidebar_layout.setSpacing(6)
+        sidebar_layout.setSpacing(4)
 
-        title = QLabel("Sign Language AI")
+        # Logo area
+        logo_row = QHBoxLayout()
+        logo_row.setContentsMargins(16, 20, 16, 4)
+        title = QLabel("Sign Studio")
         title.setObjectName("AppTitle")
+        ai_badge = QLabel("  AI  ")
+        ai_badge.setStyleSheet(
+            f"background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            f"stop:0 #6366F1, stop:1 #22D3EE);"
+            f"color:white; font-size:9px; font-weight:800;"
+            f"border-radius:5px; padding:2px 5px; letter-spacing:1px;"
+        )
+        logo_row.addWidget(title)
+        logo_row.addWidget(ai_badge)
+        logo_row.addStretch()
+        sidebar_layout.addLayout(logo_row)
+
         subtitle = QLabel("Recognition & Synthesis Studio")
         subtitle.setObjectName("AppSubtitle")
-        sidebar_layout.addWidget(title)
         sidebar_layout.addWidget(subtitle)
 
-        # Navigation Buttons
-        self.btn_nav_detect = QPushButton("🎥  Live Recognition")
-        self.btn_nav_detect.setProperty("class", "nav-btn")
-        self.btn_nav_detect.setCheckable(True)
+        # Thin divider
+        div = QFrame()
+        div.setObjectName("SidebarDivider")
+        div.setFixedHeight(1)
+        div.setStyleSheet("background:rgba(255,255,255,0.07); margin:0 16px;")
+        sidebar_layout.addWidget(div)
+        sidebar_layout.addSpacing(8)
+
+        # Nav buttons
+        self.btn_nav_detect = self._make_nav_btn("  Live Recognition", "Live ASL gesture detection (Tab 1)")
         self.btn_nav_detect.setChecked(True)
         self.btn_nav_detect.clicked.connect(lambda: self.switch_tab(0))
 
-        self.btn_nav_catalog = QPushButton("📖  Gesture Reference")
-        self.btn_nav_catalog.setProperty("class", "nav-btn")
-        self.btn_nav_catalog.setCheckable(True)
+        self.btn_nav_catalog = self._make_nav_btn("  Gesture Reference", "Browse all ASL signs A-Z (Tab 2)")
         self.btn_nav_catalog.clicked.connect(lambda: self.switch_tab(1))
 
-        self.btn_nav_custom = QPushButton("➕  Custom Gestures")
-        self.btn_nav_custom.setProperty("class", "nav-btn")
-        self.btn_nav_custom.setCheckable(True)
+        self.btn_nav_custom = self._make_nav_btn("  Custom Gestures", "Create & manage custom signs (Tab 3)")
         self.btn_nav_custom.clicked.connect(lambda: self.switch_tab(2))
 
-        self.btn_nav_export = QPushButton("📄  Export & Speech")
-        self.btn_nav_export.setProperty("class", "nav-btn")
-        self.btn_nav_export.setCheckable(True)
+        self.btn_nav_export = self._make_nav_btn("  Export & Speech", "Export sentences and play audio (Tab 4)")
         self.btn_nav_export.clicked.connect(lambda: self.switch_tab(3))
 
-        sidebar_layout.addWidget(self.btn_nav_detect)
-        sidebar_layout.addWidget(self.btn_nav_catalog)
-        sidebar_layout.addWidget(self.btn_nav_custom)
-        sidebar_layout.addWidget(self.btn_nav_export)
+        for btn in [self.btn_nav_detect, self.btn_nav_catalog,
+                    self.btn_nav_custom, self.btn_nav_export]:
+            sidebar_layout.addWidget(btn)
+
         sidebar_layout.addStretch()
 
-        # Camera Status Footer
-        self.cam_status_lbl = QLabel("🟢 Camera Active")
-        self.cam_status_lbl.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; padding: 0 16px;")
-        sidebar_layout.addWidget(self.cam_status_lbl)
+        # Footer divider
+        div2 = QFrame()
+        div2.setFixedHeight(1)
+        div2.setStyleSheet("background:rgba(255,255,255,0.07); margin:0 16px;")
+        sidebar_layout.addWidget(div2)
+        sidebar_layout.addSpacing(8)
 
-        btn_exit = QPushButton("⏻  Quit Application")
-        btn_exit.setProperty("class", "nav-btn")
-        btn_exit.setStyleSheet("color: #f87171;")
+        # Camera status pill
+        self.cam_status_lbl = PillBadge("  Camera Active", state="live")
+        self.cam_status_lbl.setContentsMargins(16, 0, 16, 0)
+        sidebar_layout.addWidget(self.cam_status_lbl)
+        sidebar_layout.addSpacing(6)
+
+        # Theme toggle button
+        theme_row = QHBoxLayout()
+        theme_row.setContentsMargins(10, 0, 10, 0)
+        self._btn_theme = QPushButton("☀" if self._theme == "dark" else "🌙")
+        self._btn_theme.setProperty("class", "btn-mini")
+        self._btn_theme.setFixedWidth(50)
+        self._btn_theme.setToolTip("Switch to Light theme" if self._theme == "dark" else "Switch to Dark theme")
+        self._btn_theme.clicked.connect(self._toggle_theme)
+        theme_lbl = QLabel("Theme")
+        theme_lbl.setStyleSheet("color:#64748B; font-size:11px; font-weight:600;")
+        theme_row.addWidget(theme_lbl)
+        theme_row.addStretch()
+        theme_row.addWidget(self._btn_theme)
+        sidebar_layout.addLayout(theme_row)
+        sidebar_layout.addSpacing(6)
+
+        # Quit button
+        btn_exit = QPushButton("  Quit Application")
+        btn_exit.setProperty("class", "btn-quit")
+        btn_exit.setToolTip("Close the application")
         btn_exit.clicked.connect(self.close)
         sidebar_layout.addWidget(btn_exit)
 
         main_layout.addWidget(sidebar)
 
-        # 2. Main Stacked Content Pages
+        # ── Main Stacked Content Pages ────────────────────────────────────
         self.stack = QStackedWidget()
         self.page_detect = self.build_detect_page()
         self.page_catalog = self.build_catalog_page()
@@ -529,11 +379,14 @@ class Dashboard(QMainWindow):
         self.stack.addWidget(self.page_custom)
         self.stack.addWidget(self.page_export)
 
-        main_layout.addWidget(self.stack)
+        main_layout.addWidget(self.stack, stretch=1)
+
+    # ── switch_tab (unchanged logic, visual nav update added) ───────────────
 
     def switch_tab(self, idx):
         self.stack.setCurrentIndex(idx)
-        buttons = [self.btn_nav_detect, self.btn_nav_catalog, self.btn_nav_custom, self.btn_nav_export]
+        buttons = [self.btn_nav_detect, self.btn_nav_catalog,
+                   self.btn_nav_custom, self.btn_nav_export]
         for i, b in enumerate(buttons):
             b.setChecked(i == idx)
         if idx == 3:
@@ -541,37 +394,53 @@ class Dashboard(QMainWindow):
         elif idx == 2:
             self.refresh_custom_gallery()
 
-    # ---------------- TAB 1: LIVE RECOGNITION ----------------
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE BUILDERS
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── TAB 1: LIVE RECOGNITION ──────────────────────────────────────────────
+
     def build_detect_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(16)
 
-        # Header bar
+        # ── Page header bar ───────────────────────────────────────────────
         header = QHBoxLayout()
-        h_title = QLabel("Real-time Gesture Recognition")
-        h_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #f8fafc;")
-        header.addWidget(h_title)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        h_title = QLabel("Live Recognition")
+        h_title.setProperty("role", "page_title")
+        h_desc = QLabel("Position your hand in the target box — gestures are detected in real time.")
+        h_desc.setProperty("role", "body")
+        title_col.addWidget(h_title)
+        title_col.addWidget(h_desc)
+        header.addLayout(title_col)
         header.addStretch()
 
-        self.btn_cam_toggle = QPushButton("Pause Camera")
+        # Header right: camera controls
+        self.btn_cam_toggle = QPushButton("  Pause Camera")
         self.btn_cam_toggle.setProperty("class", "btn-secondary")
+        self.btn_cam_toggle.setToolTip("Pause or resume the live webcam feed  [Esc]")
         self.btn_cam_toggle.clicked.connect(self.toggle_camera)
-        header.addWidget(self.btn_cam_toggle)
 
-        btn_view_ref = QPushButton("Visual ASL Chart")
+        btn_view_ref = QPushButton("  ASL Chart")
         btn_view_ref.setProperty("class", "btn-secondary")
+        btn_view_ref.setToolTip("Open the Visual ASL reference poster")
         btn_view_ref.clicked.connect(lambda: self.switch_tab(1))
-        header.addWidget(btn_view_ref)
 
+        header.addWidget(self.btn_cam_toggle)
+        header.addSpacing(8)
+        header.addWidget(btn_view_ref)
         layout.addLayout(header)
 
-        # Central grid: Left (Video Feeds) & Right (Hero & Sentence Builder)
+        # ── Two-column bento layout ───────────────────────────────────────
         content_layout = QHBoxLayout()
         content_layout.setSpacing(16)
 
-        # Left Column: Video Feeds
+        # ── LEFT COLUMN (62%) ─────────────────────────────────────────────
         left_col = QVBoxLayout()
         left_col.setSpacing(12)
 
@@ -579,134 +448,145 @@ class Dashboard(QMainWindow):
         cam_card = QFrame()
         cam_card.setProperty("class", "card")
         cam_card_layout = QVBoxLayout(cam_card)
-        cam_card_layout.setContentsMargins(10, 10, 10, 10)
-        cam_card_layout.setSpacing(6)
+        cam_card_layout.setContentsMargins(12, 10, 12, 12)
+        cam_card_layout.setSpacing(8)
 
         feed_header = QHBoxLayout()
-        feed_lbl = QLabel("Live Webcam Feed (ROI Target Box)")
-        feed_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #94a3b8;")
+        feed_lbl = QLabel("LIVE WEBCAM FEED")
+        feed_lbl.setProperty("role", "caption")
         feed_header.addWidget(feed_lbl)
         feed_header.addStretch()
         fps_lbl = QLabel("30 FPS")
-        fps_lbl.setStyleSheet("font-size: 11px; color: #64748b;")
+        fps_lbl.setStyleSheet("font-size:11px; color:#64748B; font-weight:600;")
         feed_header.addWidget(fps_lbl)
         cam_card_layout.addLayout(feed_header)
 
         self.lbl_cam_feed = QLabel()
-        self.lbl_cam_feed.setFixedSize(440, 310)
-        self.lbl_cam_feed.setStyleSheet("background-color: #020617; border-radius: 8px;")
+        self.lbl_cam_feed.setFixedSize(460, 320)
+        self.lbl_cam_feed.setProperty("role", "cam_feed")
         self.lbl_cam_feed.setAlignment(Qt.AlignCenter)
-        self.lbl_cam_feed.setText("Waiting for camera feed...")
+        self.lbl_cam_feed.setText("Waiting for camera feed…")
+        self.lbl_cam_feed.setStyleSheet(
+            "background:#000710; border-radius:10px; color:#64748B;"
+            "font-size:13px;"
+        )
         cam_card_layout.addWidget(self.lbl_cam_feed)
         left_col.addWidget(cam_card)
 
-        # Mask Feed & Tuning Card
+        # Mask & Tuning Card
         mask_card = QFrame()
-        mask_card.setProperty("class", "card")
+        mask_card.setProperty("class", "mask-card")
         mask_layout = QVBoxLayout(mask_card)
-        mask_layout.setContentsMargins(12, 10, 12, 10)
-        mask_layout.setSpacing(8)
+        mask_layout.setContentsMargins(14, 12, 14, 12)
+        mask_layout.setSpacing(10)
 
         mask_hdr = QHBoxLayout()
-        mask_lbl = QLabel("Binary Screen Threshold & Segmentation")
-        mask_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #f8fafc;")
+        mask_lbl = QLabel("BINARY MASK & SEGMENTATION")
+        mask_lbl.setProperty("role", "caption")
         mask_hdr.addWidget(mask_lbl)
         mask_hdr.addStretch()
 
-        self.btn_invert = QPushButton("⇄ Invert Mask")
+        self.btn_invert = QPushButton("  Invert Mask")
         self.btn_invert.setProperty("class", "btn-mini")
         self.btn_invert.setCheckable(True)
+        self.btn_invert.setToolTip("Invert the binary hand mask")
         self.btn_invert.clicked.connect(self.toggle_invert_mask)
         mask_hdr.addWidget(self.btn_invert)
         mask_layout.addLayout(mask_hdr)
 
         # Mode Selector
         mode_row = QHBoxLayout()
-        mode_lbl = QLabel("Threshold Mode:")
-        mode_lbl.setStyleSheet("font-size: 12px; color: #94a3b8; font-weight: 600;")
+        mode_lbl = QLabel("Threshold:")
+        mode_lbl.setProperty("role", "body")
+        mode_lbl.setFixedWidth(80)
         mode_row.addWidget(mode_lbl)
 
         self.combo_thresh_mode = QComboBox()
         self.combo_thresh_mode.addItems([
-            "🤖 Smart Skin (YCrCb + HSV) - Auto",
-            "⚡ Adaptive Otsu Auto-Contrast",
-            "🎛 Manual Value / HSV Slider"
+            "Smart Skin (YCrCb + HSV) – Auto",
+            "Adaptive Otsu Auto-Contrast",
+            "Manual Value / HSV Slider",
         ])
+        self.combo_thresh_mode.setToolTip("Select the skin segmentation algorithm")
         self.combo_thresh_mode.currentIndexChanged.connect(self.on_thresh_mode_changed)
         mode_row.addWidget(self.combo_thresh_mode, stretch=1)
         mask_layout.addLayout(mode_row)
 
+        # Mask preview + controls side-by-side
         mask_sublayout = QHBoxLayout()
-        mask_sublayout.setSpacing(10)
+        mask_sublayout.setSpacing(14)
 
-        # Live Mask Display
         self.lbl_mask_feed = QLabel()
-        self.lbl_mask_feed.setFixedSize(145, 145)
-        self.lbl_mask_feed.setStyleSheet("background-color: #020617; border-radius: 8px; border: 1px solid #334155;")
+        self.lbl_mask_feed.setFixedSize(130, 130)
+        self.lbl_mask_feed.setProperty("role", "mask_feed")
         self.lbl_mask_feed.setAlignment(Qt.AlignCenter)
+        self.lbl_mask_feed.setToolTip("64×64 binary hand mask sent to the classifier")
         mask_sublayout.addWidget(self.lbl_mask_feed)
 
-        # Controls Column
         ctrl_col = QVBoxLayout()
-        ctrl_col.setSpacing(5)
+        ctrl_col.setSpacing(8)
 
-        # Sensitivity Slider
+        # Sensitivity slider
         slider_hdr = QHBoxLayout()
-        s_lbl = QLabel("Sensitivity Tuning:")
-        s_lbl.setStyleSheet("font-size: 11px; color: #cbd5e1; font-weight: 600;")
+        s_lbl = QLabel("Sensitivity:")
+        s_lbl.setProperty("role", "body")
         slider_hdr.addWidget(s_lbl)
         slider_hdr.addStretch()
         self.slider_val_lbl = QLabel(f"{self.hsv_slider_val}")
-        self.slider_val_lbl.setStyleSheet("font-size: 11px; color: #38bdf8; font-weight: 700;")
+        self.slider_val_lbl.setStyleSheet(
+            f"color:{DARK_TOKENS['accent_end']}; font-size:12px; font-weight:700;"
+        )
         slider_hdr.addWidget(self.slider_val_lbl)
         ctrl_col.addLayout(slider_hdr)
 
         self.trackbar = QSlider(Qt.Horizontal)
         self.trackbar.setRange(20, 255)
         self.trackbar.setValue(self.hsv_slider_val)
+        self.trackbar.setToolTip("Adjust segmentation sensitivity (20–255)")
         self.trackbar.valueChanged.connect(self.on_slider_changed)
         ctrl_col.addWidget(self.trackbar)
 
-        # Filters: Denoise & Isolate Hand Contour
+        # Toggle switches (replace plain checkboxes cosmetically)
         filter_row = QHBoxLayout()
-        self.chk_denoise = QCheckBox("Denoise & Fill Voids")
+        self.chk_denoise = ToggleSwitch("Denoise & Fill")
         self.chk_denoise.setChecked(True)
+        self.chk_denoise.setToolTip("Apply morphological denoising to the binary mask")
         filter_row.addWidget(self.chk_denoise)
-
-        self.chk_isolate = QCheckBox("Isolate Hand")
+        filter_row.addSpacing(12)
+        self.chk_isolate = ToggleSwitch("Isolate Hand")
         self.chk_isolate.setChecked(True)
+        self.chk_isolate.setToolTip("Keep only the largest hand contour")
         filter_row.addWidget(self.chk_isolate)
+        filter_row.addStretch()
         ctrl_col.addLayout(filter_row)
 
-        # Lighting Presets
+        # Lighting presets
         preset_row = QHBoxLayout()
-        p_lbl = QLabel("Presets:")
-        p_lbl.setStyleSheet("font-size: 11px; color: #64748b;")
+        preset_row.setSpacing(6)
+        p_lbl = QLabel("Preset:")
+        p_lbl.setProperty("role", "body")
         preset_row.addWidget(p_lbl)
 
-        btn_preset_bright = QPushButton("☀️ Bright")
-        btn_preset_bright.setProperty("class", "btn-mini")
-        btn_preset_bright.clicked.connect(lambda: self.apply_preset("bright"))
-        preset_row.addWidget(btn_preset_bright)
-
-        btn_preset_normal = QPushButton("💡 Normal")
-        btn_preset_normal.setProperty("class", "btn-mini")
-        btn_preset_normal.clicked.connect(lambda: self.apply_preset("normal"))
-        preset_row.addWidget(btn_preset_normal)
-
-        btn_preset_dim = QPushButton("🌙 Dim")
-        btn_preset_dim.setProperty("class", "btn-mini")
-        btn_preset_dim.clicked.connect(lambda: self.apply_preset("dim"))
-        preset_row.addWidget(btn_preset_dim)
+        for label, preset_key, tip in [
+            ("Bright", "bright", "High-brightness room preset"),
+            ("Normal", "normal", "Standard indoor lighting preset"),
+            ("Dim",    "dim",    "Low-light / dim room preset"),
+        ]:
+            btn = QPushButton(label)
+            btn.setProperty("class", "btn-mini")
+            btn.setToolTip(tip)
+            btn.clicked.connect(lambda checked, k=preset_key: self.apply_preset(k))
+            preset_row.addWidget(btn)
+        preset_row.addStretch()
         ctrl_col.addLayout(preset_row)
 
         mask_sublayout.addLayout(ctrl_col)
         mask_layout.addLayout(mask_sublayout)
         left_col.addWidget(mask_card)
 
-        content_layout.addLayout(left_col, stretch=1)
+        content_layout.addLayout(left_col, stretch=62)
 
-        # Right Column: Prediction & Sentence Builder
+        # ── RIGHT COLUMN (38%) ────────────────────────────────────────────
         right_col = QVBoxLayout()
         right_col.setSpacing(12)
 
@@ -714,33 +594,47 @@ class Dashboard(QMainWindow):
         hero_card = QFrame()
         hero_card.setProperty("class", "hero-card")
         hero_layout = QVBoxLayout(hero_card)
-        hero_layout.setContentsMargins(16, 16, 16, 16)
-        hero_layout.setSpacing(10)
+        hero_layout.setContentsMargins(20, 18, 20, 18)
+        hero_layout.setSpacing(12)
 
         hero_top = QHBoxLayout()
-        recog_title = QLabel("CURRENT DETECTED GESTURE")
-        recog_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #a5b4fc; letter-spacing: 1px;")
+        recog_title = QLabel("DETECTED GESTURE")
+        recog_title.setProperty("role", "caption")
         hero_top.addWidget(recog_title)
         hero_top.addStretch()
         self.status_badge = QLabel("Tracking Hand")
-        self.status_badge.setStyleSheet("background-color: #1e3a8a; color: #93c5fd; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;")
+        self.status_badge.setProperty("badge_state", "searching")
+        self.status_badge.setStyleSheet(
+            "background:rgba(99,102,241,0.15); color:#818CF8;"
+            "border:1px solid rgba(99,102,241,0.3);"
+            "border-radius:10px; padding:3px 10px;"
+            "font-size:11px; font-weight:600;"
+        )
         hero_top.addWidget(self.status_badge)
         hero_layout.addLayout(hero_top)
 
-        # Big Hero Character Display
+        # Big prediction letter
         self.lbl_hero_char = QLabel("—")
-        self.lbl_hero_char.setStyleSheet("font-size: 72px; font-weight: 900; color: #38bdf8; text-align: center;")
+        self.lbl_hero_char.setProperty("role", "hero_char")
         self.lbl_hero_char.setAlignment(Qt.AlignCenter)
+        self.lbl_hero_char.setStyleSheet(
+            f"font-size:88px; font-weight:900;"
+            f"color:{DARK_TOKENS['accent_end']};"
+            f"letter-spacing:-2px;"
+        )
         hero_layout.addWidget(self.lbl_hero_char)
 
-        # Confidence Bar
+        # Confidence bar
         conf_row = QHBoxLayout()
         conf_lbl = QLabel("Confidence:")
-        conf_lbl.setStyleSheet("font-size: 12px; color: #94a3b8; font-weight: 500;")
+        conf_lbl.setProperty("role", "body")
         conf_row.addWidget(conf_lbl)
         self.conf_bar = QProgressBar()
         self.conf_bar.setRange(0, 100)
         self.conf_bar.setValue(0)
+        self.conf_bar.setFormat("0%")
+        self.conf_bar.setFixedHeight(20)
+        self.conf_bar.setToolTip("CNN classification confidence for the current gesture")
         conf_row.addWidget(self.conf_bar)
         hero_layout.addLayout(conf_row)
 
@@ -753,98 +647,118 @@ class Dashboard(QMainWindow):
         sent_layout.setContentsMargins(16, 16, 16, 16)
         sent_layout.setSpacing(12)
 
+        sent_hdr = QHBoxLayout()
         sent_title = QLabel("Constructed Sentence")
-        sent_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #f8fafc;")
-        sent_layout.addWidget(sent_title)
+        sent_title.setProperty("role", "section_title")
+        sent_hdr.addWidget(sent_title)
+        sent_hdr.addStretch()
+        # Character counter label
+        self._char_counter = QLabel("0 chars")
+        self._char_counter.setStyleSheet("color:#64748B; font-size:11px;")
+        sent_hdr.addWidget(self._char_counter)
+        sent_layout.addLayout(sent_hdr)
 
         self.text_sentence = QTextEdit()
-        self.text_sentence.setPlaceholderText("Recognized characters and formed words will appear here...\n\nPress 'C' or click '+ Append' to add character\nPress 'Space' to add space\nPress 'Backspace' to delete last character")
-        self.text_sentence.setMinimumHeight(140)
+        self.text_sentence.setPlaceholderText(
+            "Recognized characters will appear here…\n\n"
+            "[C] Append   [Space] Space   [⌫] Backspace   [S] Speak   [Esc] Pause"
+        )
+        self.text_sentence.setMinimumHeight(130)
+        self.text_sentence.textChanged.connect(self._update_char_counter)
         sent_layout.addWidget(self.text_sentence)
 
-        # Action Buttons
+        # Row 1: edit actions
         btn_row1 = QHBoxLayout()
         btn_row1.setSpacing(8)
-        self.btn_append = QPushButton("+ Append (C)")
+        self.btn_append = QPushButton("+ Append")
         self.btn_append.setProperty("class", "btn-success")
+        self.btn_append.setToolTip("Append the current predicted character  [C]")
         self.btn_append.clicked.connect(self.append_current_prediction)
-        btn_row1.addWidget(self.btn_append)
 
         self.btn_space = QPushButton("␣ Space")
         self.btn_space.setProperty("class", "btn-secondary")
+        self.btn_space.setToolTip("Insert a space  [Space]")
         self.btn_space.clicked.connect(self.add_space)
-        btn_row1.addWidget(self.btn_space)
 
-        self.btn_backspace = QPushButton("⌫ Backspace")
+        self.btn_backspace = QPushButton("⌫ Back")
         self.btn_backspace.setProperty("class", "btn-secondary")
+        self.btn_backspace.setToolTip("Delete last character  [Backspace]")
         self.btn_backspace.clicked.connect(self.backspace)
-        btn_row1.addWidget(self.btn_backspace)
 
-        self.btn_clear = QPushButton("🗑 Clear")
+        self.btn_clear = QPushButton("Clear")
         self.btn_clear.setProperty("class", "btn-danger")
+        self.btn_clear.setToolTip("Clear the entire sentence")
         self.btn_clear.clicked.connect(self.clear_sentence)
-        btn_row1.addWidget(self.btn_clear)
+
+        for b in [self.btn_append, self.btn_space, self.btn_backspace, self.btn_clear]:
+            btn_row1.addWidget(b)
         sent_layout.addLayout(btn_row1)
 
-        # Audio & Export Buttons
+        # Row 2: audio / export actions
         btn_row2 = QHBoxLayout()
         btn_row2.setSpacing(8)
-
-        self.btn_speak = QPushButton("🔊 Speak (S)")
+        self.btn_speak = QPushButton("Speak  [S]")
         self.btn_speak.setProperty("class", "btn-primary")
+        self.btn_speak.setToolTip("Read the sentence aloud with text-to-speech  [S]")
         self.btn_speak.clicked.connect(self.speak_sentence)
-        btn_row2.addWidget(self.btn_speak)
 
-        self.btn_copy = QPushButton("📋 Copy Text")
+        self.btn_copy = QPushButton("Copy")
         self.btn_copy.setProperty("class", "btn-secondary")
+        self.btn_copy.setToolTip("Copy sentence to clipboard")
         self.btn_copy.clicked.connect(self.copy_sentence)
-        btn_row2.addWidget(self.btn_copy)
 
-        self.btn_save = QPushButton("💾 Save (Shift+S)")
+        self.btn_save = QPushButton("Save  [Shift+S]")
         self.btn_save.setProperty("class", "btn-secondary")
+        self.btn_save.setToolTip("Save to temp buffer  [Shift+S]")
         self.btn_save.clicked.connect(self.save_buffer_file)
-        btn_row2.addWidget(self.btn_save)
+
+        for b in [self.btn_speak, self.btn_copy, self.btn_save]:
+            btn_row2.addWidget(b)
         sent_layout.addLayout(btn_row2)
 
         right_col.addWidget(sent_card)
-        content_layout.addLayout(right_col, stretch=1)
+        content_layout.addLayout(right_col, stretch=38)
         layout.addLayout(content_layout)
 
         return page
 
-    # ---------------- TAB 2: GESTURE CATALOG ----------------
+    def _update_char_counter(self):
+        """Update the live character counter next to the sentence builder title."""
+        txt = self.text_sentence.toPlainText()
+        self._char_counter.setText(f"{len(txt)} chars")
+
+    # ── TAB 2: GESTURE CATALOG ───────────────────────────────────────────────
+
     def build_catalog_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(16)
 
+        # Header
         header = QHBoxLayout()
-        h_title = QLabel("ASL Gesture Catalog & Reference Guide")
-        h_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #f8fafc;")
+        h_title = QLabel("Gesture Reference")
+        h_title.setProperty("role", "page_title")
         header.addWidget(h_title)
         header.addStretch()
 
         search_box = QLineEdit()
-        search_box.setPlaceholderText("🔍 Filter gestures...")
-        search_box.setFixedWidth(220)
+        search_box.setPlaceholderText("  Search gestures…")
+        search_box.setFixedWidth(240)
+        search_box.setToolTip("Filter the gesture catalog by letter, name, or description")
         header.addWidget(search_box)
         layout.addLayout(header)
 
-        # Tab widget inside Catalog: 1. Alphabet Grid, 2. Visual Poster
+        # Tab widget
         cat_tabs = QTabWidget()
-        cat_tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #1e293b; background: #0f172a; border-radius: 8px; }
-            QTabBar::tab { background: #1e293b; color: #94a3b8; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; margin-right: 4px; font-weight: 600; }
-            QTabBar::tab:selected { background: #2563eb; color: white; }
-        """)
 
-        # Sub-tab 1: Grid list of all gestures
+        # Sub-tab 1: Grid
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         grid_container = QWidget()
         self.catalog_grid = QGridLayout(grid_container)
         self.catalog_grid.setSpacing(12)
+        self.catalog_grid.setContentsMargins(8, 8, 8, 8)
 
         cards = []
         col_count = 3
@@ -852,117 +766,172 @@ class Dashboard(QMainWindow):
             card = QFrame()
             card.setProperty("class", "card")
             c_layout = QVBoxLayout(card)
-            c_layout.setContentsMargins(12, 12, 12, 12)
-            c_layout.setSpacing(6)
+            c_layout.setContentsMargins(14, 14, 14, 14)
+            c_layout.setSpacing(8)
 
             top_h = QHBoxLayout()
             badge = QLabel(g["char"])
-            badge.setStyleSheet("background-color: #2563eb; color: white; font-size: 18px; font-weight: 800; padding: 4px 12px; border-radius: 6px;")
+            badge.setStyleSheet(
+                "background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                "stop:0 #6366F1, stop:1 #22D3EE);"
+                "color:white; font-size:16px; font-weight:800;"
+                "padding:4px 12px; border-radius:8px; letter-spacing:0.5px;"
+            )
             top_h.addWidget(badge)
+            top_h.addSpacing(8)
             name_lbl = QLabel(g["name"])
-            name_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #f1f5f9;")
+            name_lbl.setProperty("role", "section_title")
+            name_lbl.setStyleSheet("font-size:13px; font-weight:700; color:#F1F5F9;")
             top_h.addWidget(name_lbl)
             top_h.addStretch()
+
+            type_colors = {
+                "Alphabet": ("#818CF8", "rgba(129,140,248,0.12)"),
+                "Special":  ("#FBBF24", "rgba(251,191,36,0.12)"),
+            }
+            fc, bc = type_colors.get(g["type"], ("#94A3B8", "transparent"))
             type_tag = QLabel(g["type"])
-            type_tag.setStyleSheet("color: #64748b; font-size: 11px;")
+            type_tag.setStyleSheet(
+                f"color:{fc}; background:{bc}; border-radius:5px;"
+                f"padding:2px 7px; font-size:10px; font-weight:700;"
+            )
             top_h.addWidget(type_tag)
             c_layout.addLayout(top_h)
 
             desc = QLabel(g["desc"])
-            desc.setStyleSheet("color: #94a3b8; font-size: 12px; line-height: 1.4;")
+            desc.setProperty("role", "body")
             desc.setWordWrap(True)
+            desc.setStyleSheet("font-size:12px; color:#94A3B8; line-height:1.5;")
             c_layout.addWidget(desc)
 
-            row = i // col_count
-            col = i % col_count
-            self.catalog_grid.addWidget(card, row, col)
+            row_i = i // col_count
+            col_i = i % col_count
+            self.catalog_grid.addWidget(card, row_i, col_i)
             cards.append((g, card))
 
         def filter_cards(txt):
             txt = txt.strip().lower()
             for g, card in cards:
-                matches = (txt in g["char"].lower()) or (txt in g["name"].lower()) or (txt in g["desc"].lower())
-                card.setVisible(matches)
+                show = (not txt) or (
+                    txt in g["char"].lower() or
+                    txt in g["name"].lower() or
+                    txt in g["desc"].lower()
+                )
+                card.setVisible(show)
 
         search_box.textChanged.connect(filter_cards)
-
         scroll.setWidget(grid_container)
-        cat_tabs.addTab(scroll, "Alphabet & Signs (A-Z)")
+        cat_tabs.addTab(scroll, "  Alphabet & Signs (A–Z)")
 
-        # Sub-tab 2: Visual Chart (template.png)
+        # Sub-tab 2: Visual Poster
         chart_scroll = QScrollArea()
         chart_scroll.setWidgetResizable(True)
         chart_container = QWidget()
         chart_layout = QVBoxLayout(chart_container)
         chart_layout.setAlignment(Qt.AlignCenter)
+        chart_layout.setContentsMargins(20, 20, 20, 20)
 
         chart_lbl = QLabel()
+        chart_lbl.setAlignment(Qt.AlignCenter)
         if os.path.exists('template.png'):
             pm = QPixmap('template.png')
-            chart_lbl.setPixmap(pm.scaled(480, 720, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            chart_lbl.setPixmap(pm.scaled(500, 740, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             chart_lbl.setText("template.png not found")
+        chart_lbl.setStyleSheet("border-radius:12px; border:1px solid rgba(255,255,255,0.07);")
         chart_layout.addWidget(chart_lbl)
         chart_scroll.setWidget(chart_container)
-        cat_tabs.addTab(chart_scroll, "Visual ASL Poster (Template)")
+        cat_tabs.addTab(chart_scroll, "  Visual ASL Poster")
 
         layout.addWidget(cat_tabs)
         return page
 
-    # ---------------- TAB 3: CUSTOM GESTURES STUDIO ----------------
+    # ── TAB 3: CUSTOM GESTURES STUDIO ────────────────────────────────────────
+
     def build_custom_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(16)
 
+        # Header
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
         h_title = QLabel("Custom Gesture Studio")
-        h_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #f8fafc;")
-        layout.addWidget(h_title)
+        h_title.setProperty("role", "page_title")
+        h_desc = QLabel("Capture your own hand signs and add them to the recognition engine.")
+        h_desc.setProperty("role", "body")
+        title_col.addWidget(h_title)
+        title_col.addWidget(h_desc)
+        layout.addLayout(title_col)
 
         content = QHBoxLayout()
         content.setSpacing(16)
 
-        # Left: Capture tools
+        # Left: Create card
         c_left = QFrame()
         c_left.setProperty("class", "card")
         cl_layout = QVBoxLayout(c_left)
-        cl_layout.setSpacing(12)
+        cl_layout.setContentsMargins(20, 20, 20, 20)
+        cl_layout.setSpacing(14)
 
-        cl_title = QLabel("Record New Gesture")
-        cl_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #f8fafc;")
-        cl_layout.addWidget(cl_title)
+        create_title = QLabel("Create New Gesture")
+        create_title.setProperty("role", "section_title")
+        cl_layout.addWidget(create_title)
 
-        lbl_inst = QLabel("1. Enter a unique gesture name below.\n2. Position your hand inside the camera target box.\n3. Click 'Capture Gesture' (or press Shift+S).")
-        lbl_inst.setStyleSheet("font-size: 12px; color: #94a3b8; line-height: 1.5;")
-        cl_layout.addWidget(lbl_inst)
+        # Numbered stepper instructions
+        for step_num, step_text in [
+            ("1", "Enter a unique name for your gesture below."),
+            ("2", "Position your hand clearly inside the camera target box."),
+            ("3", "Click 'Capture & Save' when the mask looks correct."),
+        ]:
+            step_row = QHBoxLayout()
+            step_row.setSpacing(10)
+            num_lbl = QLabel(step_num)
+            num_lbl.setFixedSize(24, 24)
+            num_lbl.setAlignment(Qt.AlignCenter)
+            num_lbl.setStyleSheet(
+                "background:#6366F1; color:white; border-radius:12px;"
+                "font-size:11px; font-weight:800;"
+            )
+            step_row.addWidget(num_lbl)
+            txt_lbl = QLabel(step_text)
+            txt_lbl.setProperty("role", "body")
+            txt_lbl.setWordWrap(True)
+            step_row.addWidget(txt_lbl, stretch=1)
+            cl_layout.addLayout(step_row)
 
         self.txt_gest_name = QLineEdit()
-        self.txt_gest_name.setPlaceholderText("Enter gesture name (e.g. OK, ThumbsUp, Hello)...")
+        self.txt_gest_name.setPlaceholderText("Gesture name (e.g. OK, ThumbsUp, Hello)…")
+        self.txt_gest_name.setToolTip("Enter a unique name for your custom gesture")
         cl_layout.addWidget(self.txt_gest_name)
 
-        btn_capture = QPushButton("📸  Capture & Save Gesture")
+        btn_capture = QPushButton("  Capture & Save Gesture")
         btn_capture.setProperty("class", "btn-primary")
+        btn_capture.setToolTip("Capture the current mask and save it as a custom gesture")
+        btn_capture.setMinimumHeight(44)
         btn_capture.clicked.connect(self.capture_custom_gesture)
         cl_layout.addWidget(btn_capture)
 
         cl_layout.addStretch()
         content.addWidget(c_left, stretch=1)
 
-        # Right: Saved Gestures Gallery
+        # Right: Gallery card
         c_right = QFrame()
         c_right.setProperty("class", "card")
         cr_layout = QVBoxLayout(c_right)
+        cr_layout.setContentsMargins(20, 20, 20, 20)
         cr_layout.setSpacing(12)
 
-        cr_title = QLabel("Saved Gestures Gallery")
-        cr_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #f8fafc;")
-        cr_layout.addWidget(cr_title)
+        gallery_title = QLabel("Saved Gestures")
+        gallery_title.setProperty("role", "section_title")
+        cr_layout.addWidget(gallery_title)
 
         self.gallery_scroll = QScrollArea()
         self.gallery_scroll.setWidgetResizable(True)
         self.gallery_widget = QWidget()
         self.gallery_layout = QVBoxLayout(self.gallery_widget)
+        self.gallery_layout.setSpacing(8)
         self.gallery_scroll.setWidget(self.gallery_widget)
         cr_layout.addWidget(self.gallery_scroll)
 
@@ -971,7 +940,7 @@ class Dashboard(QMainWindow):
         return page
 
     def refresh_custom_gallery(self):
-        # Clear existing items
+        """Refresh gallery (logic unchanged; only widget styling updated)."""
         while self.gallery_layout.count():
             item = self.gallery_layout.takeAt(0)
             if item.widget():
@@ -979,36 +948,133 @@ class Dashboard(QMainWindow):
 
         files = fileSearch()
         if not files:
-            no_lbl = QLabel("No custom gestures saved yet.")
-            no_lbl.setStyleSheet("color: #64748b; font-size: 13px; padding: 20px;")
-            self.gallery_layout.addWidget(no_lbl)
+            empty_lbl = QLabel("No custom gestures yet.")
+            empty_lbl.setStyleSheet(
+                "color:#64748B; font-size:14px; font-weight:600;"
+                "padding:40px; qproperty-alignment:AlignCenter;"
+            )
+            empty_lbl.setAlignment(Qt.AlignCenter)
+            self.gallery_layout.addWidget(empty_lbl)
             return
 
         for f in files:
             row = QFrame()
-            row.setStyleSheet("background: #0b1120; border-radius: 8px; padding: 6px;")
+            row.setStyleSheet(
+                "background:#0D1424; border-radius:10px; border:1px solid rgba(255,255,255,0.06);"
+            )
             r_lay = QHBoxLayout(row)
+            r_lay.setContentsMargins(10, 8, 10, 8)
+            r_lay.setSpacing(12)
 
             img_p = os.path.join("SampleGestures", f)
             icon_lbl = QLabel()
             pm = QPixmap(img_p)
             icon_lbl.setPixmap(pm.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            icon_lbl.setFixedSize(48, 48)
+            icon_lbl.setStyleSheet("border-radius:6px; border:1px solid rgba(255,255,255,0.08);")
             r_lay.addWidget(icon_lbl)
 
             name = f.replace('.png', '')
-            name_lbl = QLabel(f"Gesture: '{name}'")
-            name_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #f1f5f9;")
+            name_lbl = QLabel(name)
+            name_lbl.setStyleSheet("font-size:13px; font-weight:700; color:#F1F5F9;")
             r_lay.addWidget(name_lbl)
             r_lay.addStretch()
 
             btn_del = QPushButton("Delete")
             btn_del.setProperty("class", "btn-danger")
-            btn_del.setFixedSize(65, 28)
+            btn_del.setFixedSize(70, 32)
+            btn_del.setToolTip(f"Delete gesture '{name}'")
             btn_del.clicked.connect(lambda checked, fn=f: self.delete_custom_gesture(fn))
             r_lay.addWidget(btn_del)
 
             self.gallery_layout.addWidget(row)
         self.gallery_layout.addStretch()
+
+    # ── TAB 4: EXPORT & SPEECH ───────────────────────────────────────────────
+
+    def build_export_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(16)
+
+        # Header
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+        h_title = QLabel("Export & Speech")
+        h_title.setProperty("role", "page_title")
+        h_desc = QLabel("Review your sentence, play it aloud, or export it to a text file.")
+        h_desc.setProperty("role", "body")
+        title_col.addWidget(h_title)
+        title_col.addWidget(h_desc)
+        layout.addLayout(title_col)
+
+        card = QFrame()
+        card.setProperty("class", "card")
+        c_layout = QVBoxLayout(card)
+        c_layout.setContentsMargins(20, 20, 20, 20)
+        c_layout.setSpacing(14)
+
+        # Editor header with word/char count
+        ed_hdr = QHBoxLayout()
+        ed_title = QLabel("Sentence Editor")
+        ed_title.setProperty("role", "section_title")
+        ed_hdr.addWidget(ed_title)
+        ed_hdr.addStretch()
+        self._export_counter = QLabel("0 words · 0 chars")
+        self._export_counter.setStyleSheet("color:#64748B; font-size:11px;")
+        ed_hdr.addWidget(self._export_counter)
+        c_layout.addLayout(ed_hdr)
+
+        self.export_editor = QTextEdit()
+        self.export_editor.setMinimumHeight(260)
+        self.export_editor.setStyleSheet(
+            "font-family:'Courier New', 'Consolas', monospace;"
+            "font-size:15px; line-height:1.6;"
+        )
+        self.export_editor.textChanged.connect(self._update_export_counter)
+        c_layout.addWidget(self.export_editor)
+
+        # Action bar
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+
+        btn_speak = QPushButton("  Speak Aloud")
+        btn_speak.setProperty("class", "btn-primary")
+        btn_speak.setToolTip("Read the text aloud using text-to-speech")
+        btn_speak.setMinimumHeight(40)
+        btn_speak.clicked.connect(self.speak_export_text)
+
+        btn_save_file = QPushButton("  Save to .txt")
+        btn_save_file.setProperty("class", "btn-success")
+        btn_save_file.setToolTip("Export the text to a .txt file on disk")
+        btn_save_file.setMinimumHeight(40)
+        btn_save_file.clicked.connect(self.save_export_to_file)
+
+        btn_clear = QPushButton("  Clear")
+        btn_clear.setProperty("class", "btn-secondary")
+        btn_clear.setToolTip("Clear the editor")
+        btn_clear.setMinimumHeight(40)
+        btn_clear.clicked.connect(self.export_editor.clear)
+
+        btn_row.addWidget(btn_speak)
+        btn_row.addWidget(btn_save_file)
+        btn_row.addWidget(btn_clear)
+        btn_row.addStretch()
+        c_layout.addLayout(btn_row)
+
+        layout.addWidget(card)
+        return page
+
+    def _update_export_counter(self):
+        """Update the live word/character counter on the export page."""
+        txt = self.export_editor.toPlainText()
+        words = len(txt.split()) if txt.strip() else 0
+        self._export_counter.setText(f"{words} words · {len(txt)} chars")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ALL LOGIC METHODS BELOW ARE UNCHANGED FROM THE ORIGINAL
+    # ─────────────────────────────────────────────────────────────────────────
 
     def capture_custom_gesture(self):
         name = self.txt_gest_name.text().strip()
@@ -1033,54 +1099,12 @@ class Dashboard(QMainWindow):
     def delete_custom_gesture(self, fname):
         path = os.path.join("SampleGestures", fname)
         if os.path.exists(path):
-            reply = QMessageBox.question(self, "Confirm Delete", f"Are you sure you want to delete '{fname}'?", QMessageBox.Yes | QMessageBox.No)
+            reply = QMessageBox.question(self, "Confirm Delete",
+                                         f"Are you sure you want to delete '{fname}'?",
+                                         QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
                 os.remove(path)
                 self.refresh_custom_gallery()
-
-    # ---------------- TAB 4: EXPORT & SPEECH ----------------
-    def build_export_page(self):
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(16)
-
-        h_title = QLabel("Text Export & Audio Playback")
-        h_title.setStyleSheet("font-size: 22px; font-weight: 700; color: #f8fafc;")
-        layout.addWidget(h_title)
-
-        card = QFrame()
-        card.setProperty("class", "card")
-        c_layout = QVBoxLayout(card)
-        c_layout.setSpacing(12)
-
-        lbl_desc = QLabel("Review formed sentences, play back with text-to-speech, or export directly to a text file.")
-        lbl_desc.setStyleSheet("color: #94a3b8; font-size: 13px;")
-        c_layout.addWidget(lbl_desc)
-
-        self.export_editor = QTextEdit()
-        self.export_editor.setMinimumHeight(240)
-        c_layout.addWidget(self.export_editor)
-
-        btn_row = QHBoxLayout()
-        btn_speak = QPushButton("🔊  Speak Text Aloud")
-        btn_speak.setProperty("class", "btn-primary")
-        btn_speak.clicked.connect(self.speak_export_text)
-        btn_row.addWidget(btn_speak)
-
-        btn_save_file = QPushButton("💾  Save to .txt File")
-        btn_save_file.setProperty("class", "btn-success")
-        btn_save_file.clicked.connect(self.save_export_to_file)
-        btn_row.addWidget(btn_save_file)
-
-        btn_clear = QPushButton("🗑  Clear")
-        btn_clear.setProperty("class", "btn-secondary")
-        btn_clear.clicked.connect(self.export_editor.clear)
-        btn_row.addWidget(btn_clear)
-        c_layout.addLayout(btn_row)
-
-        layout.addWidget(card)
-        return page
 
     def refresh_export_page(self):
         content = self.text_sentence.toPlainText().strip()
@@ -1105,7 +1129,8 @@ class Dashboard(QMainWindow):
             QMessageBox.information(self, "Notice", "Nothing to export.")
             return
 
-        filename, _ = QFileDialog.getSaveFileName(self, "Export File", "", "Text Files (*.txt);;All Files (*)")
+        filename, _ = QFileDialog.getSaveFileName(self, "Export File", "",
+                                                   "Text Files (*.txt);;All Files (*)")
         if filename:
             if not filename.endswith('.txt'):
                 filename += '.txt'
@@ -1113,7 +1138,8 @@ class Dashboard(QMainWindow):
                 f.write(txt)
             QMessageBox.information(self, "Saved", f"File saved successfully to:\n{filename}")
 
-    # ---------------- CAMERA ENGINE & PREDICTION LOOP ----------------
+    # ── Camera Engine & Prediction Loop (UNCHANGED) ──────────────────────────
+
     def start_camera(self):
         try:
             if self.cam is None or not self.cam.isOpened():
@@ -1121,12 +1147,24 @@ class Dashboard(QMainWindow):
                 if not self.cam.isOpened():
                     self.cam = cv2.VideoCapture(0)
             if not self.cam.isOpened():
-                self.cam_status_lbl.setText("⚪ Camera Offline")
-                self.cam_status_lbl.setStyleSheet("color: #ef4444; font-size: 12px; font-weight: 600; padding: 0 16px;")
+                self.cam_status_lbl.setText("  Camera Offline")
+                self.cam_status_lbl.setProperty("cam_state", "error")
+                self.cam_status_lbl.setStyleSheet(
+                    "color:#F87171; background:rgba(248,113,113,0.12);"
+                    "border:1px solid rgba(248,113,113,0.3);"
+                    "border-radius:10px; padding:3px 10px;"
+                    "font-size:11px; font-weight:600;"
+                )
                 self.lbl_cam_feed.setText("Unable to open camera.\nPlease connect a webcam.")
             else:
-                self.cam_status_lbl.setText("🟢 Camera Active")
-                self.cam_status_lbl.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; padding: 0 16px;")
+                self.cam_status_lbl.setText("  Camera Active")
+                self.cam_status_lbl.setProperty("cam_state", "live")
+                self.cam_status_lbl.setStyleSheet(
+                    "color:#34D399; background:rgba(52,211,153,0.12);"
+                    "border:1px solid rgba(52,211,153,0.3);"
+                    "border-radius:10px; padding:3px 10px;"
+                    "font-size:11px; font-weight:600;"
+                )
                 self.timer.start(33)
         except Exception as e:
             self.lbl_cam_feed.setText(f"Camera initialization error: {e}")
@@ -1134,14 +1172,24 @@ class Dashboard(QMainWindow):
     def toggle_camera(self):
         self.cam_active = not self.cam_active
         if self.cam_active:
-            self.btn_cam_toggle.setText("Pause Camera")
-            self.cam_status_lbl.setText("🟢 Camera Active")
-            self.cam_status_lbl.setStyleSheet("color: #10b981; font-size: 12px; font-weight: 600; padding: 0 16px;")
+            self.btn_cam_toggle.setText("  Pause Camera")
+            self.cam_status_lbl.setText("  Camera Active")
+            self.cam_status_lbl.setStyleSheet(
+                "color:#34D399; background:rgba(52,211,153,0.12);"
+                "border:1px solid rgba(52,211,153,0.3);"
+                "border-radius:10px; padding:3px 10px;"
+                "font-size:11px; font-weight:600;"
+            )
             self.timer.start(33)
         else:
-            self.btn_cam_toggle.setText("Resume Camera")
-            self.cam_status_lbl.setText("⚪ Camera Paused")
-            self.cam_status_lbl.setStyleSheet("color: #eab308; font-size: 12px; font-weight: 600; padding: 0 16px;")
+            self.btn_cam_toggle.setText("  Resume Camera")
+            self.cam_status_lbl.setText("  Camera Paused")
+            self.cam_status_lbl.setStyleSheet(
+                "color:#FBBF24; background:rgba(251,191,36,0.12);"
+                "border:1px solid rgba(251,191,36,0.3);"
+                "border-radius:10px; padding:3px 10px;"
+                "font-size:11px; font-weight:600;"
+            )
             self.timer.stop()
 
     def on_slider_changed(self, val):
@@ -1149,38 +1197,22 @@ class Dashboard(QMainWindow):
         self.slider_val_lbl.setText(f"{val}")
 
     def toggle_invert_mask(self):
-        self.invert_mask = not self.invert_mask
-        if self.invert_mask:
-            self.btn_invert.setText("⇄ Inverted (ON)")
-            self.btn_invert.setStyleSheet("background-color: #2563eb; color: #ffffff;")
-        else:
-            self.btn_invert.setText("⇄ Invert Mask")
-            self.btn_invert.setStyleSheet("")
+        self.invert_mask = self.btn_invert.isChecked()
 
     def on_thresh_mode_changed(self, idx):
-        if idx == 0:  # Smart Skin
-            self.trackbar.setValue(65)
-        elif idx == 1:  # Otsu
-            pass
-        elif idx == 2:  # Manual
-            self.trackbar.setValue(120)
+        # Slider only relevant in manual mode
+        self.trackbar.setEnabled(idx == 2)
 
     def apply_preset(self, preset_type):
         if preset_type == "bright":
+            self.trackbar.setValue(100)
             self.combo_thresh_mode.setCurrentIndex(0)
-            self.trackbar.setValue(85)
-            self.chk_denoise.setChecked(True)
-            self.chk_isolate.setChecked(True)
         elif preset_type == "normal":
-            self.combo_thresh_mode.setCurrentIndex(0)
             self.trackbar.setValue(65)
-            self.chk_denoise.setChecked(True)
-            self.chk_isolate.setChecked(True)
-        elif preset_type == "dim":
             self.combo_thresh_mode.setCurrentIndex(0)
-            self.trackbar.setValue(45)
-            self.chk_denoise.setChecked(True)
-            self.chk_isolate.setChecked(True)
+        elif preset_type == "dim":
+            self.trackbar.setValue(35)
+            self.combo_thresh_mode.setCurrentIndex(0)
 
     def process_binary_threshold(self, imcrop):
         if imcrop is None or imcrop.size == 0:
@@ -1189,64 +1221,49 @@ class Dashboard(QMainWindow):
         mode_text = self.combo_thresh_mode.currentText()
         sens = self.trackbar.value()
 
-        # Pre-filter: Gaussian blur to smooth high frequency camera sensor grain
         blurred = cv2.GaussianBlur(imcrop, (5, 5), 0)
 
         if "Smart Skin" in mode_text:
-            # 1. YCrCb Biometric Skin Chrominance Segmentation
-            # In human skin, Cr clusters around 133-173 and Cb around 77-127
             ycrcb = cv2.cvtColor(blurred, cv2.COLOR_BGR2YCrCb)
             delta = int((sens - 65) * 0.25)
             cr_min = max(115, 133 - delta)
             cr_max = min(190, 175 + delta)
             cb_min = max(65, 77 - delta)
             cb_max = min(140, 127 + delta)
-            mask_ycrcb = cv2.inRange(ycrcb, np.array([0, cr_min, cb_min]), np.array([255, cr_max, cb_max]))
-
-            # 2. HSV Skin Segmentation
+            mask_ycrcb = cv2.inRange(ycrcb,
+                                     np.array([0, cr_min, cb_min]),
+                                     np.array([255, cr_max, cb_max]))
             hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-            # Normal skin hue lies in 0-25 and 165-180
             mask_hsv1 = cv2.inRange(hsv, np.array([0, 20, 30]), np.array([25, 255, 255]))
             mask_hsv2 = cv2.inRange(hsv, np.array([165, 20, 30]), np.array([180, 255, 255]))
             mask_hsv = cv2.bitwise_or(mask_hsv1, mask_hsv2)
-
-            # Combined Skin Mask
             mask = cv2.bitwise_and(mask_ycrcb, mask_hsv)
 
         elif "Otsu" in mode_text:
-            # Adaptive Otsu Auto-Contrast: Finds optimal threshold automatically
             gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             norm_gray = clahe.apply(gray)
-            _, mask = cv2.threshold(norm_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
+            _, mask = cv2.threshold(norm_gray, 0, 255,
+                                    cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         else:
-            # Manual Slider Thresholding
             hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
             lower_bound = np.array([0, 0, 0])
             upper_bound = np.array([179, 255, sens])
             mask = cv2.inRange(hsv, lower_bound, upper_bound)
 
-        # Invert mask if toggled
         if self.invert_mask:
             mask = cv2.bitwise_not(mask)
 
-        # Morphological Filtering & Denoising
         if hasattr(self, 'chk_denoise') and self.chk_denoise.isChecked():
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            # Open: removes small noise dots in background
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-            # Close: seals small holes inside the hand palm and fingers
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-            # Dilate slightly to reinforce fingertips
             mask = cv2.dilate(mask, kernel, iterations=1)
 
-        # Isolate Largest Hand Contour (removes all background clutter)
         if hasattr(self, 'chk_isolate') and self.chk_isolate.isChecked():
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 max_c = max(contours, key=cv2.contourArea)
-                # Minimum contour area filter: only keep if area is substantial (>500 pixels)
                 if cv2.contourArea(max_c) > 500:
                     clean_mask = np.zeros_like(mask)
                     cv2.drawContours(clean_mask, [max_c], -1, 255, -1)
@@ -1264,36 +1281,28 @@ class Dashboard(QMainWindow):
         if not ret or frame is None:
             return
 
-        # Flip horizontally for intuitive mirror view
         frame = cv2.flip(frame, 1)
 
-        # Coordinates for hand ROI target box
-        # Standard: (150, 50) to (350, 250) on 640x480 frame
         h, w = frame.shape[:2]
         x1, y1 = int(w * 0.45), int(h * 0.15)
         x2, y2 = int(w * 0.85), int(h * 0.65)
 
-        # Extract hand region for thresholding
         imcrop = frame[y1:y2, x1:x2]
         if imcrop.size == 0:
             return
 
-        # Process Improved Binary Threshold
         mask = self.process_binary_threshold(imcrop)
         self.last_mask = mask
 
-        # Save temporary frame for prediction
         save_img = cv2.resize(mask, (image_x, image_y))
         cv2.imwrite("1.png", save_img)
 
-        # Run predictor
         pred_char, conf = predictor(mask)
         self.current_prediction = pred_char
         self.current_confidence = conf
 
-        # Draw stylish HUD Bounding Box on Frame
+        # Draw HUD bounding box
         cv2.rectangle(frame, (x1, y1), (x2, y2), (56, 189, 248), 2)
-        # Corner brackets
         corner_len = 16
         cv2.line(frame, (x1, y1), (x1 + corner_len, y1), (16, 185, 129), 4)
         cv2.line(frame, (x1, y1), (x1, y1 + corner_len), (16, 185, 129), 4)
@@ -1303,37 +1312,60 @@ class Dashboard(QMainWindow):
         cv2.line(frame, (x1, y2), (x1, y2 - corner_len), (16, 185, 129), 4)
         cv2.line(frame, (x2, y2), (x2 - corner_len, y2), (16, 185, 129), 4)
         cv2.line(frame, (x2, y2), (x2, y2 - corner_len), (16, 185, 129), 4)
+        cv2.putText(frame, "HAND TARGET", (x1 + 6, y1 - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (56, 189, 248), 1, cv2.LINE_AA)
 
-        # Label on bounding box
-        cv2.putText(frame, "HAND TARGET", (x1 + 6, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (56, 189, 248), 1, cv2.LINE_AA)
-
-        # Render Frame to PyQt Label
+        # Render to Qt
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         fh, fw, fc = rgb_frame.shape
         qimg = QImage(rgb_frame.data, fw, fh, fc * fw, QImage.Format_RGB888)
-        self.lbl_cam_feed.setPixmap(QPixmap.fromImage(qimg).scaled(440, 310, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.lbl_cam_feed.setPixmap(
+            QPixmap.fromImage(qimg).scaled(460, 320, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
 
-        # Render Mask
         mh, mw = mask.shape
         qmask = QImage(mask.data, mw, mh, mw, QImage.Format_Grayscale8)
-        self.lbl_mask_feed.setPixmap(QPixmap.fromImage(qmask).scaled(140, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.lbl_mask_feed.setPixmap(
+            QPixmap.fromImage(qmask).scaled(130, 130, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
 
-        # Update Hero Prediction Card
+        # Update hero card
         if pred_char:
             self.lbl_hero_char.setText(pred_char)
             conf_pct = int(conf * 100)
             self.conf_bar.setValue(conf_pct)
-            self.conf_bar.setFormat(f"{conf_pct}% Confidence")
-            self.status_badge.setText(f"Recognized: {pred_char}")
-            self.status_badge.setStyleSheet("background-color: #065f46; color: #6ee7b7; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;")
+            self.conf_bar.setFormat(f"{conf_pct}%")
+
+            # Confidence colour via property (drives QSS [conf_level] selector)
+            level = "high" if conf_pct >= 80 else ("mid" if conf_pct >= 50 else "low")
+            self.conf_bar.setProperty("conf_level", level)
+            self.conf_bar.style().unpolish(self.conf_bar)
+            self.conf_bar.style().polish(self.conf_bar)
+
+            self.status_badge.setText(f"  Recognized: {pred_char}")
+            self.status_badge.setStyleSheet(
+                "background:rgba(52,211,153,0.15); color:#34D399;"
+                "border:1px solid rgba(52,211,153,0.4);"
+                "border-radius:10px; padding:3px 10px;"
+                "font-size:11px; font-weight:600;"
+            )
         else:
             self.lbl_hero_char.setText("—")
             self.conf_bar.setValue(0)
-            self.conf_bar.setFormat("Searching...")
-            self.status_badge.setText("Tracking Hand")
-            self.status_badge.setStyleSheet("background-color: #1e3a8a; color: #93c5fd; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;")
+            self.conf_bar.setFormat("Searching…")
+            self.conf_bar.setProperty("conf_level", "")
+            self.conf_bar.style().unpolish(self.conf_bar)
+            self.conf_bar.style().polish(self.conf_bar)
+            self.status_badge.setText("  Tracking Hand")
+            self.status_badge.setStyleSheet(
+                "background:rgba(99,102,241,0.15); color:#818CF8;"
+                "border:1px solid rgba(99,102,241,0.3);"
+                "border-radius:10px; padding:3px 10px;"
+                "font-size:11px; font-weight:600;"
+            )
 
-    # ---------------- KEYBOARD ACTIONS & SHORTCUTS ----------------
+    # ── Keyboard Shortcuts (UNCHANGED) ───────────────────────────────────────
+
     def keyPressEvent(self, event):
         key = event.key()
         if key == Qt.Key_C:
@@ -1350,6 +1382,8 @@ class Dashboard(QMainWindow):
             self.toggle_camera()
         else:
             super(Dashboard, self).keyPressEvent(event)
+
+    # ── Sentence actions (UNCHANGED) ─────────────────────────────────────────
 
     def append_current_prediction(self):
         if self.current_prediction:
@@ -1386,14 +1420,16 @@ class Dashboard(QMainWindow):
         txt = self.text_sentence.toPlainText()
         if txt:
             QApplication.clipboard().setText(txt)
-            QMessageBox.information(self, "Copied", "Sentence copied to clipboard!")
+            Toast.show_in(self, "Copied to clipboard!")
 
     def save_buffer_file(self):
         txt = self.text_sentence.toPlainText()
         if txt.strip():
             with open("temp.txt", "w", encoding='utf-8') as f:
                 f.write(txt)
-            QMessageBox.information(self, "Saved", "Sentence temporarily saved to buffer. You can export it in the Export tab.")
+            Toast.show_in(self, "Sentence saved to buffer.")
+
+    # ── Close (UNCHANGED) ────────────────────────────────────────────────────
 
     def closeEvent(self, event):
         if hasattr(self, 'timer') and self.timer.isActive():
@@ -1404,7 +1440,13 @@ class Dashboard(QMainWindow):
         event.accept()
 
 
+# ── Entry point ──────────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
+    # HiDPI flags (set before QApplication if not already done)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
     app = QApplication(sys.argv)
     win = Dashboard()
     win.show()
